@@ -2,6 +2,7 @@ import os, sys, json, glob
 import pickle as pkl
 import shutil
 import argparse
+import numpy as np
 from utils import *
 from models import *
 from trainer import Trainer
@@ -15,9 +16,9 @@ def initParams():
 
     parser.add_argument('--seed', type=int, help="random number seed", default=688)
 
-    parser.add_argument('-m', '--model_name', help='Model arch', default='pr_s_f',
+    parser.add_argument('-m', '--model_name', help='Model arch', default='casc_asv_cm',
                         choices=['baseline1',
-                                 'pr_l_i', 'pr_s_i', 'pr_l_f', 'pr_s_f',
+                                 'pr_l_i', 'pr_s_i',
                                  'baseline1_l_i', 'baseline1_s_i', 
                                  'casc_asv_cm', 'casc_cm_asv', 'film'])
 
@@ -96,14 +97,9 @@ def initParams():
 
 def train(args):
     if "pr" in args.model_name:
-        mapping_dict = {"l": "linear", "s": "sigmoid", "c": None}
+        mapping_dict = {"l": "linear", "s": "sigmoid"}
         trainable_dict = {"i": False, "f": True}
-        if "c" in args.model_name:
-            f = open("./calibrator/sv_sigmoid.pk", 'rb')
-            calibrator = pkl.load(f)
-        else:
-            calibrator = None
-        model = Parallel_PR(trainable=trainable_dict[args.model_name[-1]], calibrator=calibrator,
+        model = Parallel_PR(trainable=trainable_dict[args.model_name[-1]], calibrator=None,
                             map_function=mapping_dict[args.model_name[-3]])
     elif "baseline1_" in args.model_name:
         mapping_dict = {"l": "linear", "s": "sigmoid"}
@@ -115,7 +111,7 @@ def train(args):
     elif args.model_name == "casc_cm_asv":
         model = Cascade(first='cm')
     elif args.model_name == "film":
-        model = Film()
+        model = Film(batch_size=args.batch_size)
     else:
         raise ValueError("Which model do you want to use?")
     set_init_weights(model)
@@ -123,6 +119,7 @@ def train(args):
     trainer.run_train()
 
     return trainer
+
 
 def evaluate_one_iter(args, model, data_minibatch):
     asv1, asv2, cm2, ans, key = data_minibatch
@@ -161,6 +158,19 @@ def evaluate_on_set(args, model, set):
               ": %0.3f, spf_eer_" % (100 * sv_eer) + set + ": %0.3f" % (100 * spf_eer))
 
 
+def validate_cascade(args, model):
+    evaluation_set = SASV_Dataset(args, "dev")
+    eval_loader = DataLoader(evaluation_set, batch_size=args.batch_size, shuffle=False,
+                             num_workers=args.num_workers, drop_last=False, pin_memory=True)
+    asv_cur_min, cm_cur_min = np.inf, np.inf
+    for num, data_slice in enumerate(eval_loader):
+        asv1, asv2, cm2, ans, key = data_slice
+        asv_cur_min = min(asv_cur_min, asv2.min())
+        cm_cur_min = min(cm_cur_min, cm2.min())
+    model.min_asv = asv_cur_min
+    model.min_cm = cm_cur_min
+
+
 def evaluate(args, model):
     print("\nFinal evaluation for the best epoch:")
     evaluate_on_set(args, model, "dev")
@@ -170,7 +180,7 @@ def evaluate(args, model):
 if __name__ == '__main__':
     args = initParams()
     model = None
-    if not args.test_only:
+    if not args.test_only and 'casc' not in args.model_name:
         train(args)
     if 'casc' not in args.model_name:
         model = torch.load(glob.glob(os.path.join(args.output_dir, "*_best.pt"))[-1])
@@ -178,7 +188,7 @@ if __name__ == '__main__':
         model = Cascade(first='asv', threshold=0.596)
     elif args.model_name == 'casc_cm_asv':
         model = Cascade(first='cm', threshold=0.411)
-    else:
-        model = Film()
+    if 'casc' in args.model_name:
+        validate_cascade(args, model)
     evaluate(args, model)
-
+    
