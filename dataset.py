@@ -7,6 +7,7 @@ class SASV_Dataset(Dataset):
     def __init__(self, args, partition):
         self.part = partition
         self.embedding_dir = args.embedding_dir
+        self.embd_name = "cm_embd_" if args.model_name == "film" else "cm_out_"
         if self.part == "trn":
             self.spk_meta_dir = args.spk_meta_dir
             self.load_meta_information()
@@ -22,7 +23,7 @@ class SASV_Dataset(Dataset):
 
     def load_embeddings(self):
         # load saved countermeasures(CM) related preparations
-        with open(self.embedding_dir + "cm_embd_" + self.part + ".pk", "rb") as f:
+        with open(self.embedding_dir + self.embd_name + self.part + ".pk", "rb") as f:
             embd = pk.load(f)
             self.cm_embd = {}
             for key, value in embd.items():
@@ -90,4 +91,3 @@ class SASV_Dataset(Dataset):
 
         return self.spk_model[spkmd], self.asv_embd[key], \
                self.cm_embd[key], ans_type, nontype_dict[ans]
-
