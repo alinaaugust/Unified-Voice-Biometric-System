@@ -118,8 +118,8 @@ class Cascade(nn.Module):
         super().__init__()
         self.name = "Cascade_" + first
         self.first = first
-        self.min_cm = -32.189720153808594
-        self.min_asv = -0.17463111877441406
+        self.min_cm = 0
+        self.min_asv = 0
         self.threshold = threshold
         self.coss = nn.CosineSimilarity(dim=1, eps=1e-8)
         self.sigmoid = nn.Sigmoid()
@@ -149,13 +149,13 @@ class Cascade(nn.Module):
 
 
 class Film(nn.Module):
-    def __init__(self, trainable=True, asv_embd = 192, cm_embd=96):
+    def __init__(self, batch_size, trainable=True, asv_embd = 192, cm_embd=96):
         super().__init__()
         self.name = "FiLM"
         self.trainable = trainable
         self.sv_emb = asv_embd
         self.cm_emb = cm_embd
-        self.bs = 1024
+        self.bs = batch_size
         # define all for film part 
         self.sv_ln = nn.LayerNorm(self.sv_emb)
         self.cm_ln = nn.LayerNorm(self.cm_emb)
@@ -199,3 +199,4 @@ class Film(nn.Module):
         sasv_score = self.forward(embd_asv_enr, embd_asv_tst, embd_cm_tst)
         loss = self.loss_sasv(sasv_score, labels.unsqueeze(1).float())
         return loss
+        
