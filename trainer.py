@@ -145,5 +145,3 @@ class Trainer(object):
                     min_eer = sasv_eer_dev
         except:
             print("\nThis model will not continue training or has nothing to train.")
-
-
